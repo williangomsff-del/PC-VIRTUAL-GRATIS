@@ -1,0 +1,54 @@
+name: PC Virtual Ubuntu
+
+on: 
+  workflow_dispatch: # Permite iniciar o PC manualmente pelo painel do GitHub
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout Repositório
+      uses: actions/checkout@v4
+
+    - name: Configurar Senha do Usuário
+      run: |
+        # Define a senha '123456' para o usuário atual (runner)
+        echo "runner:123456" | sudo chpasswd
+        sudo usermod -aG sudo runner
+
+    - name: Instalar Interface Gráfica e Servidor VNC
+      run: |
+        sudo apt update
+        # Instala o ambiente desktop XFCE e o servidor VNC sem carregar pacotes pesados
+        sudo apt install -y xfce4 xfce4-goodies tightvncserver
+
+    - name: Instalar e Configurar o Ngrok
+      run: |
+        # Baixa e instala o Ngrok oficialmente
+        curl -s https://amazonaws.com | sudo tee /etc/apt/trusted.gpg.d/ngrok.asc >/dev/null
+        echo "deb https://amazonaws.com buster main" | sudo tee /etc/apt/sources.list.d/ngrok.list
+        sudo apt update && sudo apt install ngrok
+        
+        # Autentica no Ngrok usando seu Token secreto configurado no GitHub
+        ngrok config add-authtoken ${{ secrets.NGROK_AUTHTOKEN }}
+
+    - name: Iniciar Servidor VNC
+      run: |
+        # Configura a senha de acesso ao VNC (também definida como 123456)
+        mkdir -p ~/.vnc
+        echo "123456" | vncpasswd -f > ~/.vnc/passwd
+        chmod 600 ~/.vnc/passwd
+        
+        # Inicia a tela na resolução padrão do seu script
+        vncserver :1 -geometry 1280x720 -depth 24
+
+    - name: Expor VNC via Ngrok (TCP)
+      run: |
+        # Cria o túnel na porta do VNC (5901) em segundo plano
+        ngrok tcp 5901 &
+
+    - name: Manter a Máquina Ativa
+      run: |
+        echo "PC Virtual pronto! Use um cliente VNC para se conectar."
+        # Impede que o GitHub encerre o processo imediatamente
+        sleep infinity
